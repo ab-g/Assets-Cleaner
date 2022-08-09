@@ -3,103 +3,7 @@ import json
 import os
 import re
 import sys
-
-g_key_to_dir = {
-    'scenes': 'scenes',
-    'scripts': 'scripts',
-    'cameras': 'cameras',
-    'meshes': 'meshes',
-    'skinControllers': 'skin-controllers',
-    'materials': 'materials',
-    'textures2d': 'textures/2D',
-    'texturesCube': 'textures/cube',
-    'images': 'images',
-    'lights': 'lights',
-    'animations': 'animations',
-    'audioSources': 'audio-sources',
-    'soundSamples': 'sounds',
-    'rigidBodies': 'rigid-bodies',
-    'colliders': 'colliders',
-    'characters': 'characters',
-    'stateMachines': 'state-machines',
-}
-
-g_dir_to_key = {
-    'scenes': 'scenes',
-    'scripts': 'scripts',
-    'cameras': 'cameras',
-    'meshes': 'meshes',
-    'skin-controllers': 'skinControllers',
-    'materials': 'materials',
-    'textures/2D': 'textures2d',
-    'textures/cube': 'texturesCube',
-    'images': 'images',
-    'lights': 'lights',
-    'animations': 'animations',
-    'audio-sources': 'audioSources',
-    'sounds': 'soundSamples',
-    'rigid-bodies': 'rigidBodies',
-    'colliders': 'colliders',
-    'characters': 'characters',
-    'state-machines': 'stateMachines',
-}
-
-
-def make_assets_ids_dict():
-    assets_ids = {
-        'scenes': set(),
-        'scripts': set(),
-        'cameras': set(),
-        'meshes': set(),
-        'skinControllers': set(),
-        'materials': set(),
-        'textures2d': set(),
-        'texturesCube': set(),
-        'images': set(),
-        'lights': set(),
-        'animations': set(),
-        'audioSources': set(),
-        'soundSamples': set(),
-        'rigidBodies': set(),
-        'colliders': set(),
-        'characters': set(),
-        'stateMachines': set()
-    }
-    return assets_ids
-
-
-def get_resource_pack_data(game_project_dir_path):
-    resource_pack_file_path = os.path.join(game_project_dir_path, 'resource-pack.json')
-    with open(resource_pack_file_path, 'r') as resource_pack_file:
-        resource_pack_data = json.load(resource_pack_file)
-    return resource_pack_data
-
-
-def get_first_scene_id(resource_pack_data):
-    return resource_pack_data['scenes']['map'][0]['value']['id']['uuid']
-
-
-def get_scene_data(game_project_dir_path, scene_id):
-    scene_file_path = os.path.join(game_project_dir_path, 'scenes/{0}.json'.format(scene_id))
-    with open(scene_file_path, 'r') as scene_file:
-        scene_data = json.load(scene_file)
-    return scene_data
-
-
-def get_default_character_data(game_project_dir_path, character_id=None):
-    if character_id is None:
-        resource_pack_data = get_resource_pack_data(game_project_dir_path)
-        character_id = resource_pack_data['defaultCharacterId']['uuid']
-    character_file_path = os.path.join(game_project_dir_path, 'characters/{0}.json'.format(character_id))
-    with open(character_file_path, 'r') as character_file:
-        character_data = json.load(character_file)
-    return character_data
-
-
-def get_file_path(path_to_asset):
-    with open(path_to_asset, 'r') as asset_file:
-        asset_data = json.load(asset_file)
-    return asset_data['filePath']
+from manu.fn import *
 
 
 def extract_used_textures_ids(game_project_dir_path, materials_ids):
@@ -188,7 +92,7 @@ def extract_used_sounds_ids(game_project_dir_path, animations_ids):
 
 
 def extract_assets_ids_from_nodes(game_project_dir_path, nodes):
-    assets_ids = make_assets_ids_dict()
+    assets_ids = make_asset_key_to_set_dict()
 
     for node in nodes:
         obj = node['object3D']
@@ -266,7 +170,7 @@ def extract_assets_ids_from_nodes(game_project_dir_path, nodes):
 def extract_assets_ids_from_scene(game_project_dir_path, scene_id=None):
     resource_pack_data = get_resource_pack_data(game_project_dir_path)
     if scene_id is None:
-        scene_id = get_first_scene_id(resource_pack_data)
+        scene_id = get_first_scene_id_from_resource_pack_data(resource_pack_data)
     scene_data = get_scene_data(game_project_dir_path, scene_id)
     assets_ids = extract_assets_ids_from_nodes(game_project_dir_path, scene_data['nodes'])
 
@@ -278,7 +182,7 @@ def extract_assets_ids_from_scene(game_project_dir_path, scene_id=None):
 
 
 def extract_assets_ids(game_project_dir_path):
-    assets_ids = make_assets_ids_dict()
+    assets_ids = make_asset_key_to_set_dict()
 
     resource_pack_data = get_resource_pack_data(game_project_dir_path)
 
@@ -288,13 +192,13 @@ def extract_assets_ids(game_project_dir_path):
     default_state_machine_id = resource_pack_data['defaultStateMachineId']['uuid']
     assets_ids['stateMachines'].add(default_state_machine_id)
 
-    scene_id = get_first_scene_id(resource_pack_data)
+    scene_id = get_first_scene_id_from_resource_pack_data(resource_pack_data)
     assets_ids['scenes'].add(scene_id)
     assets_ids_from_scene = extract_assets_ids_from_scene(game_project_dir_path, scene_id)
     for k, v in assets_ids_from_scene.items():
         assets_ids[k] = assets_ids[k].union(v)
 
-    default_character_data = get_default_character_data(game_project_dir_path)
+    default_character_data = get_character_data(game_project_dir_path)
     assets_ids_from_character = extract_assets_ids_from_nodes(game_project_dir_path, default_character_data['body'])
     for k, v in assets_ids_from_character.items():
         assets_ids[k] = assets_ids[k].union(v)
@@ -313,13 +217,13 @@ def clean_via_resource_pack(game_project_dir_path, used_assets_ids):
             for i in range(len(kv) - 1, -1, -1):
                 asset_id = kv[i]['key']['uuid']
                 if asset_id not in v:
-                    asset_file_path = os.path.join(game_project_dir_path, '{0}/{1}.json'.format(g_key_to_dir[k], asset_id))
+                    asset_file_path = os.path.join(game_project_dir_path, '{0}/{1}.json'.format(KEY_TO_DIR[k], asset_id))
                     bin_file_path = None
                     if 'meshes' == k:
-                        bin_file_path = os.path.join(game_project_dir_path, '{0}/{1}.bin'.format(g_key_to_dir[k], asset_id))
+                        bin_file_path = os.path.join(game_project_dir_path, '{0}/{1}.bin'.format(KEY_TO_DIR[k], asset_id))
                     elif 'images' == k or 'soundSamples' == k:
-                        file_path = get_file_path(asset_file_path)
-                        bin_file_path = os.path.join(game_project_dir_path, '{0}/{1}'.format(g_key_to_dir[k], file_path))
+                        file_path = get_file_path_to_attachment_by_asset_path(asset_file_path)
+                        bin_file_path = os.path.join(game_project_dir_path, '{0}/{1}'.format(KEY_TO_DIR[k], file_path))
                     print(asset_file_path)
                     os.remove(asset_file_path)
                     if bin_file_path is not None:
@@ -331,22 +235,22 @@ def clean_via_resource_pack(game_project_dir_path, used_assets_ids):
 
 
 def extract_attachments(game_project_dir_path):
-    attachments = make_assets_ids_dict()
+    attachments = make_asset_key_to_set_dict()
     for dir in ['images', 'sounds']:
         asset_dir = os.path.join(game_project_dir_path, '{0}/{1}'.format(game_project_dir_path, dir))
         for full_file_path in glob.iglob(f'{asset_dir}/*.*'):
             file_name_with_ext = os.path.basename(full_file_path)
             file_name, file_extension = os.path.splitext(file_name_with_ext)
             if '.json' == file_extension:
-                attachments[g_dir_to_key[dir]].add(get_file_path(full_file_path))
+                attachments[DIR_TO_KEY[dir]].add(get_file_path_to_attachment_by_asset_path(full_file_path))
     return attachments
 
 
 def find_unused_files(game_project_dir_path, used_assets_ids):
     attachments = extract_attachments(game_project_dir_path)
 
-    for dir in g_dir_to_key:
-        key = g_dir_to_key[dir]
+    for dir in DIR_TO_KEY:
+        key = DIR_TO_KEY[dir]
         asset_dir = os.path.join(game_project_dir_path, '{0}/{1}'.format(game_project_dir_path, dir))
         for full_file_path in glob.iglob(f'{asset_dir}/*.*'):
             file_name_with_ext = os.path.basename(full_file_path)
